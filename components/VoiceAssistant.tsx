@@ -14,6 +14,7 @@ export default function VoiceAssistant() {
   const [status, setStatus] = useState<Status>("idle");
   const [log, setLog] = useState<LogEntry[]>([]);
   const [liveText, setLiveText] = useState("");
+  const [recError, setRecError] = useState<string | null>(null);
   const recognitionRef = useRef<any>(null);
 
   useEffect(() => {
@@ -44,11 +45,17 @@ export default function VoiceAssistant() {
       }
       setLiveText(interim || final);
       if (final) {
+        // We have a full sentence — stop listening ourselves rather than
+        // waiting for the browser's own silence detection, which can be
+        // unreliable (it may keep listening indefinitely, or cut off early).
+        recognitionRef.current?.stop();
         void submit(final);
       }
     };
 
-    recognition.onerror = () => {
+    recognition.onerror = (event: any) => {
+      console.error("Speech recognition error:", event.error);
+      setRecError(describeError(event.error));
       setStatus("idle");
     };
 
@@ -92,8 +99,15 @@ export default function VoiceAssistant() {
       return;
     }
     window.speechSynthesis?.cancel();
+    setRecError(null);
     setStatus("listening");
-    recognitionRef.current.start();
+    try {
+      recognitionRef.current.start();
+    } catch (err: any) {
+      console.error("Failed to start recognition:", err);
+      setRecError(describeError(err?.message || "start-failed"));
+      setStatus("idle");
+    }
   }
 
   if (status === "unsupported") {
@@ -121,6 +135,8 @@ export default function VoiceAssistant() {
       </button>
 
       <p className="status-line">{statusLabel(status)}</p>
+
+      {recError && <p className="live-text" style={{ color: "#e08484" }}>{recError}</p>}
 
       {liveText && <p className="live-text">&ldquo;{liveText}&rdquo;</p>}
 
@@ -155,5 +171,23 @@ function statusLabel(status: Status) {
       return "speaking…";
     default:
       return "tap to talk";
+  }
+}
+
+function describeError(code: string): string {
+  switch (code) {
+    case "not-allowed":
+    case "permission-denied":
+      return "Microphone permission was blocked. Allow it via the padlock icon in your address bar.";
+    case "no-speech":
+      return "No speech was detected — try again and speak right after tapping.";
+    case "audio-capture":
+      return "No microphone was found. Check that one is connected and selected as your system default.";
+    case "network":
+      return "Speech recognition needs an internet connection to reach the browser's speech service, and it couldn't connect.";
+    case "service-not-allowed":
+      return "The browser blocked access to its speech recognition service.";
+    default:
+      return `Speech recognition error: ${code}`;
   }
 }

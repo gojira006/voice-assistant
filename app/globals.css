@@ -213,6 +213,81 @@ body {
   color: var(--amber);
 }
 
+.mic-check {
+  width: 100%;
+  max-width: 28rem;
+  background: var(--panel);
+  border: 1px solid var(--hairline);
+  border-radius: 0.5rem;
+  padding: 1rem 1.25rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.mic-check__row {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+}
+
+.mic-check__label {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  font-family: "IBM Plex Mono", monospace;
+}
+
+.mic-check__select {
+  flex: 1;
+  min-width: 10rem;
+  background: var(--bg);
+  color: var(--text);
+  border: 1px solid var(--hairline);
+  border-radius: 0.3rem;
+  padding: 0.4rem 0.5rem;
+  font-family: "Space Grotesk", sans-serif;
+  font-size: 0.85rem;
+}
+
+.mic-check__stop {
+  background: transparent;
+  border: 1px solid var(--hairline);
+  color: var(--text);
+  border-radius: 0.3rem;
+  padding: 0.4rem 0.75rem;
+  font-size: 0.8rem;
+  cursor: pointer;
+}
+
+.mic-check__meter {
+  width: 100%;
+  height: 0.5rem;
+  background: var(--bg);
+  border: 1px solid var(--hairline);
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.mic-check__meter-fill {
+  height: 100%;
+  background: var(--amber);
+  transition: width 80ms linear;
+}
+
+.mic-check__hint {
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  line-height: 1.5;
+  margin: 0;
+}
+
+.mic-check__error {
+  font-size: 0.8rem;
+  color: var(--blue);
+  margin: 0;
+}
+
 .panel {
   background: var(--panel);
   border: 1px solid var(--hairline);
