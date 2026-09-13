@@ -20,22 +20,38 @@ export default function VoiceAssistant() {
   const [levels, setLevels] = useState<number[]>(new Array(BAR_COUNT).fill(4));
 
   const recognitionRef = useRef<any>(null);
+  const activeRef = useRef(false);
   const transcriptEndRef = useRef<HTMLDivElement | null>(null);
   const audioCtxRef = useRef<AudioContext | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const rafRef = useRef<number | null>(null);
 
+  const SpeechRecognitionCtor =
+    typeof window !== "undefined"
+      ? (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition
+      : null;
+
   useEffect(() => {
-    const SpeechRecognition =
-      (window as any).SpeechRecognition ||
-      (window as any).webkitSpeechRecognition;
-
-    if (!SpeechRecognition) {
+    if (!SpeechRecognitionCtor) {
       setStatus("unsupported");
-      return;
     }
+    return () => {
+      stopWaveform();
+      try {
+        recognitionRef.current?.stop();
+      } catch {
+        // ignore — instance may already be stopped or gone
+      }
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
-    const recognition = new SpeechRecognition();
+  useEffect(() => {
+    transcriptEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [log, liveText]);
+
+  function createRecognition() {
+    const recognition = new SpeechRecognitionCtor();
     recognition.continuous = true;
     recognition.interimResults = true;
     recognition.lang = "en-US";
@@ -53,32 +69,31 @@ export default function VoiceAssistant() {
       }
       setLiveText(interim || final);
       if (final) {
-        recognitionRef.current?.stop();
+        try {
+          recognition.stop();
+        } catch {
+          // ignore
+        }
         void submit(final);
       }
     };
 
     recognition.onerror = (event: any) => {
       console.error("Speech recognition error:", event.error);
+      activeRef.current = false;
       setRecError(describeError(event.error));
       setStatus("idle");
       stopWaveform();
     };
 
     recognition.onend = () => {
+      activeRef.current = false;
       setStatus((s) => (s === "listening" ? "idle" : s));
       stopWaveform();
     };
 
-    recognitionRef.current = recognition;
-
-    return () => stopWaveform();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  useEffect(() => {
-    transcriptEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [log, liveText]);
+    return recognition;
+  }
 
   async function startWaveform() {
     try {
@@ -148,21 +163,38 @@ export default function VoiceAssistant() {
   }
 
   function toggleListening() {
-    if (!recognitionRef.current) return;
-    if (status === "listening") {
-      recognitionRef.current.stop();
+    if (!SpeechRecognitionCtor) return;
+
+    if (activeRef.current) {
+      try {
+        recognitionRef.current?.stop();
+      } catch {
+        // ignore
+      }
+      activeRef.current = false;
       setStatus("idle");
       stopWaveform();
       return;
     }
+
     window.speechSynthesis?.cancel();
     setRecError(null);
+
+    // Always build a fresh instance — reusing one across many start/stop
+    // cycles can leave its internal state stuck as "already started" in
+    // some browsers.
+    const recognition = createRecognition();
+    recognitionRef.current = recognition;
+
     setStatus("listening");
     startWaveform();
+
     try {
-      recognitionRef.current.start();
+      recognition.start();
+      activeRef.current = true;
     } catch (err: any) {
       console.error("Failed to start recognition:", err);
+      activeRef.current = false;
       setRecError(describeError(err?.message || "start-failed"));
       setStatus("idle");
       stopWaveform();
@@ -217,19 +249,17 @@ export default function VoiceAssistant() {
         )}
       </p>
 
-      {recError && (
-        <p className="live-text live-text--error">{recError}</p>
-      )}
+      {recError && <p className="live-text live-text--error">{recError}</p>}
 
       {liveText && <p className="live-text">&ldquo;{liveText}&rdquo;</p>}
 
       <div className="transcript" role="log">
         {log.length === 0 && (
           <p className="transcript__empty">
-            Tap the signal and try: &ldquo;what&apos;s the weather in
-            Manila&rdquo;, &ldquo;tell me a joke&rdquo;, or &ldquo;what time is
-            it&rdquo;.
-          </p>
+          Tap the signal and try: &ldquo;what&apos;s the weather in
+          Manila&rdquo;, &ldquo;what time is it in Tokyo&rdquo;, or
+          &ldquo;tell me a joke&rdquo;.
+        </p>
         )}
         {log.map((entry, i) => (
           <p
@@ -272,6 +302,8 @@ function describeError(code: string): string {
       return "Speech recognition needs an internet connection to reach the browser's speech service, and it couldn't connect.";
     case "service-not-allowed":
       return "The browser blocked access to its speech recognition service.";
+    case "aborted":
+      return "Listening was interrupted — tap the signal to try again.";
     default:
       return `Speech recognition error: ${code}`;
   }

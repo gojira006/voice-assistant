@@ -95,6 +95,41 @@ async function getWeather(city: string): Promise<string> {
   }
 }
 
+async function getTimeForCity(city: string): Promise<string> {
+  try {
+    const geo = await fetch(
+      `https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(
+        city
+      )}&count=1`
+    ).then((r) => r.json());
+
+    if (!geo.results || geo.results.length === 0) {
+      return `I couldn't find a place called ${city}.`;
+    }
+
+    const { name, country, timezone } = geo.results[0];
+
+    if (!timezone) {
+      return `I found ${name}, but couldn't determine its timezone.`;
+    }
+
+    // Intl is built into the browser — no separate time API or key needed.
+    const timeStr = new Date().toLocaleTimeString("en-US", {
+      timeZone: timezone,
+      hour: "numeric",
+      minute: "2-digit",
+    });
+    const dateStr = new Date().toLocaleDateString("en-US", {
+      timeZone: timezone,
+      weekday: "long",
+    });
+
+    return `It's ${timeStr} on ${dateStr} in ${name}, ${country}.`;
+  } catch {
+    return "I couldn't look up that timezone just now.";
+  }
+}
+
 function safeMath(expression: string): string | null {
   // Only allow digits, operators, parentheses, decimal points, and spaces.
   const cleaned = expression.replace(/[^0-9+\-*/().\s]/g, "");
@@ -127,6 +162,15 @@ export async function handleCommand(rawText: string): Promise<CommandResult> {
       reply:
         "I'm a small offline-first voice assistant, built to run without any paid services.",
     };
+  }
+
+  const cityTimeMatch = text.match(
+    /(?:time|what time is it)\s*(?:in|at|for)\s+([a-z\s]+)/
+  );
+  if (cityTimeMatch) {
+    const city = cityTimeMatch[1].trim();
+    const reply = await getTimeForCity(city);
+    return { reply };
   }
 
   if (/what.*(time)/.test(text)) {
@@ -199,7 +243,7 @@ export async function handleCommand(rawText: string): Promise<CommandResult> {
   if (/what can you do|help/.test(text)) {
     return {
       reply:
-        "You can ask me for the time or date, the weather near you or in a specific city, a joke, a quick calculation, or ask me to remember a note.",
+        "You can ask me for the time or date, the time in another city, the weather near you or elsewhere, a joke, a quick calculation, or ask me to remember a note.",
     };
   }
 

@@ -4,6 +4,12 @@ import MicrophoneCheck from "@/components/MicrophoneCheck";
 export default function Home() {
   return (
     <main className="page">
+      <div className="bg-decor" aria-hidden="true">
+        <span className="bg-decor__orb bg-decor__orb--amber" />
+        <span className="bg-decor__orb bg-decor__orb--blue" />
+        <span className="bg-decor__orb bg-decor__orb--amber2" />
+      </div>
+
       <header className="page__header">
         <h1>Signal</h1>
         <p className="page__sub">
