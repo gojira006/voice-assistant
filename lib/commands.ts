@@ -26,6 +26,50 @@ function saveNote(note: string) {
   window.localStorage.setItem("assistant-notes", JSON.stringify(notes));
 }
 
+function getCurrentPosition(): Promise<GeolocationPosition> {
+  return new Promise((resolve, reject) => {
+    if (!navigator.geolocation) {
+      reject(new Error("no-geolocation"));
+      return;
+    }
+    navigator.geolocation.getCurrentPosition(resolve, reject, {
+      timeout: 8000,
+    });
+  });
+}
+
+async function getWeatherByCoords(lat: number, lon: number): Promise<string> {
+  try {
+    const forecast = await fetch(
+      `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,weather_code,wind_speed_10m`
+    ).then((r) => r.json());
+
+    const temp = forecast.current?.temperature_2m;
+    const wind = forecast.current?.wind_speed_10m;
+
+    let place = "your location";
+    try {
+      // Nominatim (OpenStreetMap) — free, no API key, used only to turn
+      // coordinates into a readable place name.
+      const rev = await fetch(
+        `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lon}&format=json`
+      ).then((r) => r.json());
+      place =
+        rev.address?.city ||
+        rev.address?.town ||
+        rev.address?.village ||
+        rev.address?.county ||
+        place;
+    } catch {
+      // Reverse geocoding is a nice-to-have; fall back silently.
+    }
+
+    return `Right now near ${place}, it's about ${temp}°C with wind speeds near ${wind} kilometers per hour.`;
+  } catch {
+    return "I couldn't reach the weather service just now.";
+  }
+}
+
 async function getWeather(city: string): Promise<string> {
   try {
     const geo = await fetch(
@@ -109,6 +153,22 @@ export async function handleCommand(rawText: string): Promise<CommandResult> {
     return { reply };
   }
 
+  if (/weather/.test(text)) {
+    try {
+      const pos = await getCurrentPosition();
+      const reply = await getWeatherByCoords(
+        pos.coords.latitude,
+        pos.coords.longitude
+      );
+      return { reply };
+    } catch {
+      return {
+        reply:
+          "I need location access to check the weather near you — allow location access, or ask for a specific city instead, like 'weather in Cebu'.",
+      };
+    }
+  }
+
   if (/tell me a joke|make me laugh|joke/.test(text)) {
     const joke = JOKES[Math.floor(Math.random() * JOKES.length)];
     return { reply: joke };
@@ -139,7 +199,7 @@ export async function handleCommand(rawText: string): Promise<CommandResult> {
   if (/what can you do|help/.test(text)) {
     return {
       reply:
-        "You can ask me for the time or date, the weather in a city, a joke, a quick calculation, or ask me to remember a note.",
+        "You can ask me for the time or date, the weather near you or in a specific city, a joke, a quick calculation, or ask me to remember a note.",
     };
   }
 
